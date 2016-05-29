@@ -15,7 +15,7 @@ import time, random, re, sys
 
 now = time.mktime(time.localtime())
 
-def forecastSimulatePDF(self):
+def forecastSimulateCDF(self):
     query_new = '''
         select
           count() as N,
@@ -55,22 +55,25 @@ def forecastSimulatePDF(self):
     new_prob[1] += 5
     new_prob[2] += 5
     new_prob = [x / sum(new_prob[1:]) for x in new_prob[1:]]
+    new_cmf = [sum(new_prob[:i+1]) for i in range(len(new_prob))]
     
     young_prob = [float(x) for x in self.col.db.all(query_young)[0]]
     young_prob[0] += 10  # Prior that 90% of young cards get "good" resonse
     young_prob[1] += 1
     young_prob[3] += 9
     young_prob = [x / sum(young_prob[1:]) for x in young_prob[1:]]
+    young_cmf = [sum(young_prob[:i+1]) for i in range(len(young_prob))]
 	
     mature_prob = [float(x) for x in self.col.db.all(query_mature)[0]]
     mature_prob[0] += 10  # Prior that 90% of mature cards get "good" resonse
     mature_prob[1] += 1
     mature_prob[3] += 9
     mature_prob = [x / sum(mature_prob[1:]) for x in mature_prob[1:]]
+    mature_cmf = [sum(mature_prob[:i+1]) for i in range(len(mature_prob))]
+	
+    outcome_cmf = [new_cmf, young_cmf, mature_cmf]
 
-    outcome_pmf = [new_prob, young_prob, mature_prob]
-
-    return outcome_pmf
+    return outcome_cmf
 	
 class CardType:
     def __init__(self, ivl, ctype, due, factor=2.5):
@@ -79,17 +82,16 @@ class CardType:
         self._due = due
         self._factor = factor
 
-def draw_pmf(pmf):
+def draw_cmf(cmf):
     v = random.random()
-    cmf = [sum(pmf[:i+1]) for i in range(len(pmf))]
 
     for i in range(0, len(cmf)):
         if(v <= cmf[i]):
 		     return i;
     return len(cmf);
 
-def sim_single_review(outcome_pmf, c_type, c_ivl, c_factor):
-    outcome = draw_pmf(outcome_pmf[c_type])
+def sim_single_review(outcome_cmf, c_type, c_ivl, c_factor):
+    outcome = draw_cmf(outcome_cmf[c_type])
     
     if c_type == 0:
         if outcome <= 1:
@@ -125,7 +127,7 @@ def calc_ctype(reps, ivl):
     else:
         return 2
 
-def forecast_n_reviews(outcome_pmf, cards, n_time_bins=30, time_bin_length=1, max_add_per_day=5, n_smooth=1):
+def forecast_n_reviews(outcome_cmf, cards, n_time_bins=30, time_bin_length=1, max_add_per_day=5, n_smooth=1):
     t_max = n_time_bins * time_bin_length
 
     # Forecasted number of reviews
@@ -164,7 +166,7 @@ def forecast_n_reviews(outcome_pmf, cards, n_time_bins=30, time_bin_length=1, ma
                 n_reviews[c_type][int(t_elapsed / time_bin_length)] += 1
     
                 # Simulate response
-                c_type, c_ivl, correct = sim_single_review(outcome_pmf, c_type, c_ivl, card._factor)
+                c_type, c_ivl, correct = sim_single_review(outcome_cmf, c_type, c_ivl, card._factor)
     
                 # If card failed, update "relearn" count
                 if correct == 0:
@@ -212,7 +214,7 @@ def forecastSimulatePDFHistory(data, chunks=None, chunk_size=1):
 ##################################################
 def progressForecastGraphUsingSimulation(self, chunks, chunk_size, chunk_name):
     
-    outcome_pmf = forecastSimulatePDF(self)
+    outcome_cmf = forecastSimulateCDF(self)
 
     query_cards = '''
         select
@@ -241,7 +243,7 @@ def progressForecastGraphUsingSimulation(self, chunks, chunk_size, chunk_name):
 	n_time_bins = 30
 
 	n_reviews, final_ctype = forecast_n_reviews(
-		outcome_pmf,
+		outcome_cmf,
 		cards,
 		n_time_bins=n_time_bins,
 		time_bin_length=time_bin_length,
