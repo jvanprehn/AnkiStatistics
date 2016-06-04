@@ -15,7 +15,60 @@ import time, random, re, sys
 
 now = time.mktime(time.localtime())
 
+#A review has a particular outcome with a particular probability.
+#A review results in the state of the card (card interval) being changed.
+#A ReviewOutcome bundles the probability of the outcome and the card with changed state.
+class ReviewOutcome:
+
+        def __init__(self, card, prob):
+            self.__card = card
+            self.__prob = prob
+
+        def setAll(self, card, prob):
+            self.__card = card
+            self.__prob = prob
+
+        def getCard(self):
+            return self.__card
+
+        def getProb(self):
+            return __prob;
+
+        def __repr__():
+            return "ReviewOutcome(card=%r,prob=%r)" % (self.__card,self.__prob)
+
 class EaseClassifier:
+
+    # Prior that half of new cards are answered correctly
+    priorNew    = [5, 0, 5, 0]		#half of new cards are answered correctly
+    priorYoung  = [1, 0, 9, 0]		#90% of young cards get "good" response
+    priorMature = [1, 0, 9, 0]		#90% of mature cards get "good" response
+
+    #hard Doesn't occur in query_new
+    queryBaseNew = '''
+        select
+          count() as N,
+          sum(case when ease=1 then 1 else 0 end) as repeat,
+          0 as hard,
+          sum(case when ease=2 then 1 else 0 end) as good,
+          sum(case when ease=3 then 1 else 0 end) as easy
+        from revlog
+        '''
+
+    queryBaseYoungMature = '''
+        select
+          count() as N,
+          sum(case when ease=1 then 1 else 0 end) as repeat,
+          sum(case when ease=2 then 1 else 0 end) as hard,
+          sum(case when ease=3 then 1 else 0 end) as good,
+          sum(case when ease=4 then 1 else 0 end) as easy
+        from revlog
+        '''
+
+    queryNew    = queryBaseNew +         '''where type=0;'''
+    queryYoung  = queryBaseYoungMature + '''where type=1 and lastIvl < 21;'''
+    queryMature = queryBaseYoungMature + '''where type=1 and lastIvl >= 21;'''
+
     def __init__(self, parent):
         self.__db = parent.col.db
         self.__probabilities = None
