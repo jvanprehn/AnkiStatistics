@@ -15,65 +15,72 @@ import time, random, re, sys
 
 now = time.mktime(time.localtime())
 
-def forecastSimulateCDF(self):
-    query_new = '''
-        select
-          count() as N,
-          sum(case when ease=1 then 1 else 0 end) as repeat,
-          sum(case when ease=2 then 1 else 0 end) as good,
-          sum(case when ease=3 then 1 else 0 end) as easy
-        from revlog
-        where type=0
-    '''
-
-    query_young = '''
-        select
-          count() as N,
-          sum(case when ease=1 then 1 else 0 end) as repeat,
-          sum(case when ease=2 then 1 else 0 end) as hard,
-          sum(case when ease=3 then 1 else 0 end) as good,
-          sum(case when ease=4 then 1 else 0 end) as easy
-        from revlog
-        where type=1 and lastIvl < 21
-    '''
+class EaseClassifier:
+    def __init__(self, parent):
+        self.__db = parent.col.db
+        self.__probabilities = None
+        self.__probabilitiesCumulative = None
+        self.calculateCumProbabilitiesForNewEasePerCurrentEase()
 	
-    query_mature = '''
-        select
-          count() as N,
-          sum(case when ease=1 then 1 else 0 end) as repeat,
-          sum(case when ease=2 then 1 else 0 end) as hard,
-          sum(case when ease=3 then 1 else 0 end) as good,
-          sum(case when ease=4 then 1 else 0 end) as easy
-        from revlog
-        where type=1 and lastIvl >= 21
-    '''
+    def calculateCumProbabilitiesForNewEasePerCurrentEase(self):
+        query_new = '''
+            select
+              count() as N,
+              sum(case when ease=1 then 1 else 0 end) as repeat,
+              sum(case when ease=2 then 1 else 0 end) as good,
+              sum(case when ease=3 then 1 else 0 end) as easy
+            from revlog
+            where type=0
+        '''
 
-    new_prob = [float(x) for x in self.col.db.all(query_new)[0]] 
-    # Add in some fake reviews. Makes outcome probabilities reasonable when there are
-    # very few reviews in the review log. This is essentially a prior.
-    new_prob[0] += 10  # Prior that half of new cards are answered correctly
-    new_prob[1] += 5
-    new_prob[2] += 5
-    new_prob = [x / sum(new_prob[1:]) for x in new_prob[1:]]
-    new_cmf = [sum(new_prob[:i+1]) for i in range(len(new_prob))]
-    
-    young_prob = [float(x) for x in self.col.db.all(query_young)[0]]
-    young_prob[0] += 10  # Prior that 90% of young cards get "good" resonse
-    young_prob[1] += 1
-    young_prob[3] += 9
-    young_prob = [x / sum(young_prob[1:]) for x in young_prob[1:]]
-    young_cmf = [sum(young_prob[:i+1]) for i in range(len(young_prob))]
+        query_young = '''
+            select
+              count() as N,
+              sum(case when ease=1 then 1 else 0 end) as repeat,
+              sum(case when ease=2 then 1 else 0 end) as hard,
+              sum(case when ease=3 then 1 else 0 end) as good,
+              sum(case when ease=4 then 1 else 0 end) as easy
+            from revlog
+            where type=1 and lastIvl < 21
+        '''
 	
-    mature_prob = [float(x) for x in self.col.db.all(query_mature)[0]]
-    mature_prob[0] += 10  # Prior that 90% of mature cards get "good" resonse
-    mature_prob[1] += 1
-    mature_prob[3] += 9
-    mature_prob = [x / sum(mature_prob[1:]) for x in mature_prob[1:]]
-    mature_cmf = [sum(mature_prob[:i+1]) for i in range(len(mature_prob))]
-	
-    outcome_cmf = [new_cmf, young_cmf, mature_cmf]
+        query_mature = '''
+            select
+              count() as N,
+              sum(case when ease=1 then 1 else 0 end) as repeat,
+              sum(case when ease=2 then 1 else 0 end) as hard,
+              sum(case when ease=3 then 1 else 0 end) as good,
+              sum(case when ease=4 then 1 else 0 end) as easy
+            from revlog
+            where type=1 and lastIvl >= 21
+        '''
 
-    return outcome_cmf
+        new_prob = [float(x) for x in self.__db.all(query_new)[0]] 
+        # Add in some fake reviews. Makes outcome probabilities reasonable when there are
+        # very few reviews in the review log. This is essentially a prior.
+        new_prob[0] += 10  # Prior that half of new cards are answered correctly
+        new_prob[1] += 5
+        new_prob[2] += 5
+        new_prob = [x / sum(new_prob[1:]) for x in new_prob[1:]]
+        new_cmf = [sum(new_prob[:i+1]) for i in range(len(new_prob))]
+        
+        young_prob = [float(x) for x in self.__db.all(query_young)[0]]
+        young_prob[0] += 10  # Prior that 90% of young cards get "good" resonse
+        young_prob[1] += 1
+        young_prob[3] += 9
+        young_prob = [x / sum(young_prob[1:]) for x in young_prob[1:]]
+        young_cmf = [sum(young_prob[:i+1]) for i in range(len(young_prob))]
+	    
+        mature_prob = [float(x) for x in self.__db.all(query_mature)[0]]
+        mature_prob[0] += 10  # Prior that 90% of mature cards get "good" resonse
+        mature_prob[1] += 1
+        mature_prob[3] += 9
+        mature_prob = [x / sum(mature_prob[1:]) for x in mature_prob[1:]]
+        mature_cmf = [sum(mature_prob[:i+1]) for i in range(len(mature_prob))]
+	    
+        outcome_cmf = [new_cmf, young_cmf, mature_cmf]
+        
+        return outcome_cmf
 	
 class CardType:
     def __init__(self, ivl, ctype, due, factor=2.5):
@@ -214,7 +221,8 @@ def forecastSimulatePDFHistory(data, chunks=None, chunk_size=1):
 ##################################################
 def progressForecastGraphUsingSimulation(self, chunks, chunk_size, chunk_name):
     
-    outcome_cmf = forecastSimulateCDF(self)
+    easeClassifier = EaseClassifier(self)
+    outcome_cmf = easeClassifier.calculateCumProbabilitiesForNewEasePerCurrentEase()
 
     query_cards = '''
         select
