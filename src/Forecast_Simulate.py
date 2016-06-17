@@ -142,6 +142,124 @@ class CardType:
         self._due = due
         self._factor = factor
 
+class Card:
+    def __init__(self, id, ivl, factor, due, correct, lastReview):
+        self.__id = id
+        self.__ivl = ivl
+        self.__factor = factor / 1000.0
+        self.__due = due
+        self.__correct = correct
+        self.__lastReview = lastReview
+
+    def __repr__():
+        return "Card(id=%r,ivl=%r,factor=%r,due=%r,correct=%r,lastReview=%r)" % (self.__id,self.__ivl,self.__factor*1000.0,self.__due,self.__correct,self.__lastReview)
+
+    def setAll(self, id, ivl, factor, due, correct, lastReview):
+        self.__id = id
+        self.__ivl = ivl
+        self.__factor = factor / 1000.0
+        self.__due = due
+        self.__correct = correct
+        self.__lastReview = lastReview
+
+    def setAll(self, card):
+        self.__id = card.__id
+        self.__ivl = card.__ivl
+        self.__factor = card.__factor
+        self.__due = card.__due
+        self.__correct = card.__correct
+        self.__lastReview = card.__lastReview
+
+    def getId(self):
+        return self.__id
+
+    def getIvl(self):
+        return self.__ivl
+
+    def setIvl(self, ivl):
+        self.__ivl = ivl
+
+    def getFactor(self):
+        return self.__factor
+
+    def setFactor(self, factor):
+        self.__factor = factor
+
+    def getDue(self):
+        return self.__due
+
+    def setDue(self, due):
+        self.__due = due
+
+    # Type of the card, based on the interval.
+    # @return CARD_TYPE_NEW if interval = 0, CARD_TYPE_YOUNG if interval 1-20, CARD_TYPE_MATURE if interval >= 20
+    def getType(self):
+        if self.__ivl == 0:
+            return CARD_TYPE_NEW
+        elif self.__ivl >= 21:
+            return CARD_TYPE_MATURE
+        else:
+            return CARD_TYPE_YOUNG
+
+    def getCorrect(self):
+        return __correct
+
+    def setCorrect(self, correct):
+        self.__correct = correct
+
+    def getLastReview(self):
+        return self.__lastReview
+
+    def setLastReview(self, lastReview):
+        self.__lastReview = lastReview
+
+class DeckFactory:
+
+    def __init__(self, parent):
+        self.__decks = parent.col.decks
+
+    def createDeck(self, did, decks):
+        # Timber.d("Trying to get deck settings for deck with id=" + did);
+
+        conf = self.__decks.confForDid(did)
+
+        newPerDay = Settings.getMaxNewPerDay()
+        revPerDay = Settings.getMaxReviewsPerDay()
+        initialFactor = Settings.getInitialFactor()
+
+        if not conf['dyn']:
+            conf = self.__decks.confForDid(did)
+				
+            revPerDay = conf['rev']['perDay']
+            newPerDay = conf['new']['perDay']
+            initialFactor = conf['new']['initialFactor']
+
+            # Timber.d("rev.perDay=" + revPerDay);
+            # Timber.d("new.perDay=" + newPerDay);
+            # Timber.d("new.initialFactor=" + initialFactor);
+
+        return Deck(did, newPerDay, revPerDay, initialFactor)
+
+class Deck:
+
+    def __init__(self, did, newPerDay, revPerDay, initialFactor):
+        self.__did = did
+        self.__newPerDay = newPerDay
+        self.__revPerDay = revPerDay
+        self.__initialFactor = initialFactor
+
+    def getDid():
+        return did
+
+    def getNewPerDay():
+        return newPerDay
+
+    def getRevPerDay():
+        return revPerDay
+
+    def getInitialFactor():
+        return initialFactor
+
 def draw_cmf(cmf):
     v = random.random()
 
