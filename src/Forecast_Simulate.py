@@ -13,6 +13,10 @@ from anki.hooks import wrap
 from aqt.utils import showInfo
 import time, random, re, sys
 
+CARD_TYPE_NEW = 0
+CARD_TYPE_YOUNG = 1
+CARD_TYPE_MATURE = 2
+
 now = time.mktime(time.localtime())
 
 #A review has a particular outcome with a particular probability.
@@ -248,17 +252,58 @@ class Deck:
         self.__revPerDay = revPerDay
         self.__initialFactor = initialFactor
 
-    def getDid():
-        return did
+    def getDid(self):
+        return self.__did
 
-    def getNewPerDay():
-        return newPerDay
+    def getNewPerDay(self):
+        return self.__newPerDay
 
-    def getRevPerDay():
-        return revPerDay
+    def getRevPerDay(self):
+        return self.__revPerDay
 
-    def getInitialFactor():
-        return initialFactor
+    def getInitialFactor(self):
+        return self.__initialFactor
+
+class CardIterator:
+
+    def __init__(self, db, today, deck):
+        self.__today = today
+        self.__deck = deck
+
+        did = deck.getDid()
+        query = '''
+                SELECT id, due, ivl, factor, type, reps
+                FROM cards
+                WHERE did IN (?)
+                order by id
+                '''
+        # Timber.d("Forecast query: %s", query);
+        arg_did = (did,)
+        self.__cur = db.execute(query, arg_did)
+		
+    def moveToNext(self):
+
+        self.__row = self.__cur.fetchone()
+        
+        if self.__row == None:
+            return false
+        else:
+            return true
+
+    def current(self, card):
+        card.setAll(self.__row[0],                                                          # Id
+                    0 if self.__row[5] == 0 else self.__row[2],  		                    # reps = 0 ? 0 : card interval
+                    self.__row[3] if self.__row[3] > 0 else self.__deck.getInitialFactor(), # factor
+                    max(self.__row[1] - self.__today, 0),                                   # due
+                    1,                                                                      # correct
+                    -1                                                                      # lastreview
+        )
+
+    def close (self):
+
+        #if (cur != None && !cur.isClosed())
+        if (cur is not None):
+            cur.close()
 
 def draw_cmf(cmf):
     v = random.random()
