@@ -17,6 +17,11 @@ CARD_TYPE_NEW = 0
 CARD_TYPE_YOUNG = 1
 CARD_TYPE_MATURE = 2
 
+REVIEW_OUTCOME_REPEAT = 0
+REVIEW_OUTCOME_HARD = 1
+REVIEW_OUTCOME_GOOD = 2
+REVIEW_OUTCOME_EASY = 3
+
 now = time.mktime(time.localtime())
 
 #A review has a particular outcome with a particular probability.
@@ -77,9 +82,12 @@ class EaseClassifier:
         self.__db = parent.col.db
         self.__probabilities = None
         self.__probabilitiesCumulative = None
+        self.__singleReviewOutcome = ReviewOutcome(None, 0)
         self.calculateCumProbabilitiesForNewEasePerCurrentEase()
 	
     def calculateCumProbabilitiesForNewEasePerCurrentEase(self):
+        ## TODO: use base queries and adjust indexes properly and 
+        ## use calculateProbabilitiesForNewEaseForCurrentEase
         query_new = '''
             select
               count() as N,
@@ -134,11 +142,71 @@ class EaseClassifier:
         mature_prob[3] += 9
         mature_prob = [x / sum(mature_prob[1:]) for x in mature_prob[1:]]
         mature_cmf = [sum(mature_prob[:i+1]) for i in range(len(mature_prob))]
-	    
+
+        self.__probabilities = [new_prob, young_prob, mature_prob]
+        self.__probabilitiesCumulative = [new_cmf, young_cmf, mature_cmf]
+        
+        ## TODO: remove line
         outcome_cmf = [new_cmf, young_cmf, mature_cmf]
         
+        ## TODO: remove line
         return outcome_cmf
-	
+
+    def draw(self, cmf):
+        v = random.random()
+
+        for i in range(0, len(cmf)):
+            if(v <= cmf[i]):
+		        return i;
+        return len(cmf);
+
+    def simSingleReview(self, c):
+        type = c.getType()
+
+        outcome = draw(self.__probabilitiesCumulative[type])
+
+        applyOutcomeToCard(c, outcome)
+
+        self.__singleReviewOutcome.setAll(c, 1)
+        return self.___singleReviewOutcome
+
+    def simSingleReview(self, c, outcome):
+        c_type = c.getType()
+
+        # For first review, re-use current card to prevent creating too many objects
+        applyOutcomeToCard(c, outcome)
+        singleReviewOutcome.setAll(c, self.__probabilities[c_type][outcome])
+
+        return singleReviewOutcome
+
+    def applyOutcomeToCard(self, c, outcome):
+
+        type = c.getType()
+        ivl = c.getIvl()
+        factor = c.getFactor()
+
+        if(type == 0):
+            if (outcome <= 2):
+                ivl = 1
+            else:
+                ivl = 4
+        else:
+            if outcome == REVIEW_OUTCOME_REPEAT:
+                ivl = 1
+                # factor = Math.max(1300, factor - 200);
+            elif outcome == REVIEW_OUTCOME_HARD:
+                ivl *= 1.2
+            elif outcome == REVIEW_OUTCOME_GOOD:
+                ivl *= 1.2 * factor
+            else: # outcome == REVIEW_OUTCOME_EASY or default
+				ivl *= 1.2 * 2. * factor
+
+            c.setIvl(ivl)
+            c.setCorrect(1 if (outcome > 0) else 0)
+            # c.setTypetype);
+            # c.setIvl(60);
+            # c.setFactor(factor);
+
 class CardType:
     def __init__(self, ivl, ctype, due, factor=2.5):
         self._ivl = ivl
@@ -305,6 +373,7 @@ class CardIterator:
         if (cur is not None):
             cur.close()
 
+## TODO: remove
 def draw_cmf(cmf):
     v = random.random()
 
